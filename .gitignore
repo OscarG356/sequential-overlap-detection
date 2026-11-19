@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+data/processed/
+*.pkl
+.ipynb_checkpoints/
+3x16Gbaud_16QAM_B2B/
