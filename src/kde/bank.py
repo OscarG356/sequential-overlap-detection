@@ -9,7 +9,7 @@ es ~50-100x más lento en 2D para consultas masivas.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import joblib
@@ -105,10 +105,9 @@ def build_bank(inventory: pd.DataFrame,
     bank = KDEBank()
     for (chsp, osnr), group in tqdm(inv.groupby(["chsp_ghz", "osnr_db"]),
                                      desc="KDE por condición"):
-        if len(group) != 1:
-            raise ValueError(f"Condición ({chsp},{osnr}) tiene {len(group)} capturas; "
-                             f"el banco asume 1.")
-        cap = load_capture(group.iloc[0])
+        captures = [load_capture(row) for _, row in group.iterrows()]
+        # Varias adquisiciones pueden ser réplicas de una misma condición.
+        cap = replace(captures[0], y=np.concatenate([c.y for c in captures]))
         components, bw = _fit_kde_on_capture(cap, bandwidth=bandwidth,
                                              subsample=subsample, seed=seed)
         bank.add(ConditionKDE(

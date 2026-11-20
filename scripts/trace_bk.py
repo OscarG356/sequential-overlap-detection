@@ -20,6 +20,7 @@ from src.bayes.update import (build_prior, accumulate_loglik,
                               posterior_from_loglik, overlap_prob)
 from src.data.loader import load_capture, split_into_blocks, load_inventory
 from src.kde.bank import KDEBank
+from scripts.build_kde_bank import make_split
 
 
 def labels_from_inventory(inv: pd.DataFrame) -> dict[tuple, int | None]:
@@ -74,17 +75,11 @@ def main():
     prior = build_prior(bank, labels)
 
     if args.all_test:
-        test_osnr = [float(o) for o in cfg["split"]["test_osnr"]]
-        test_ids, skipped = [], []
-        for cid in inv["capture_id"]:
-            row = inv.loc[inv["capture_id"] == cid].iloc[0]
-            if float(row["osnr_db"]) not in test_osnr:
-                continue
-            z = labels.get((row["chsp_ghz"], float(row["osnr_db"])))
-            if z is None:
-                skipped.append(cid)     # ambiguas/control: no evaluables
-            else:
-                test_ids.append(cid)
+        _, _, test_ids = make_split(inv, cfg["split"])
+        skipped = [cid for cid in test_ids
+                   if labels.get((inv.loc[inv["capture_id"] == cid, "chsp_ghz"].iloc[0],
+                                  float(inv.loc[inv["capture_id"] == cid, "osnr_db"].iloc[0]))) is None]
+        test_ids = [cid for cid in test_ids if cid not in skipped]
         if skipped:
             print(f"[info] omitidas (sin etiqueta z): {skipped}")
     else:

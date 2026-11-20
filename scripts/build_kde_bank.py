@@ -12,7 +12,14 @@ from src.kde.bank import build_bank, save_bank
 def make_split(inv, cfg):
     """Devuelve listas de capture_id para train/val/test según cfg['split']."""
     strat = cfg["strategy"]
-    if strat == "by_osnr":
+    if strat == "by_song":
+        def song_id(capture_id):
+            return capture_id.rsplit("/", 1)[-1].split("_", 1)[0]
+        song = inv["capture_id"].map(song_id)
+        train = inv[song.isin(cfg["train_songs"])]
+        val = inv[song.isin(cfg["val_songs"])]
+        test = inv[song.isin(cfg["test_songs"])]
+    elif strat == "by_osnr":
         val_osnr = float(cfg["val_osnr"])
         test_osnr = [float(x) for x in cfg["test_osnr"]]
         train = inv[~inv["osnr_db"].isin([val_osnr, *test_osnr])]

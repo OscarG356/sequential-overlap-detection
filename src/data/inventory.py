@@ -12,7 +12,7 @@ import yaml
 # --- parseo de nombres de archivo ---
 # Ej: "16QAM_3x16GBd_consY23dB.csv" -> osnr=23.0
 #     "16QAM_3x16GBd_consY21.5dB.csv" -> osnr=21.5
-_OSNR_RE = re.compile(r"consY(?P<osnr>[\d.]+)dB")
+_OSNR_RE = re.compile(r"(?:consY|_)(?P<osnr>[\d.]+)dB")
 
 def _parse_osnr(fname: str) -> float | None:
     m = _OSNR_RE.search(fname)
@@ -22,7 +22,7 @@ def _parse_chsp_from_dir(dirname: str) -> float | str:
     """'16GHz'->16.0, '15p5GHz'->15.5, 'single_ch'->'single'."""
     if dirname == "single_ch":
         return "single"
-    m = re.match(r"(?P<val>[\d p]+)GHz$", dirname)
+    m = re.match(r"(?P<val>[\dp]+)GHz$", dirname)
     if not m:
         return dirname  # directorio raro, se conserva como string
     return float(m.group("val").replace("p", "."))
@@ -43,6 +43,7 @@ class InventoryConfig:
     ambiguous_dirs: list[str]
     control_dirs: list[str]
     ignore_files: list[str]
+    scenarios: list[str]
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "InventoryConfig":
@@ -54,6 +55,7 @@ class InventoryConfig:
             ambiguous_dirs=list(cfg.get("ambiguous_dirs", [])),
             control_dirs=list(cfg.get("control_dirs", [])),
             ignore_files=list(cfg.get("ignore_files", [])),
+            scenarios=list(cfg.get("scenarios", [])),
         )
 
 def build_inventory(cfg: InventoryConfig) -> pd.DataFrame:
@@ -62,16 +64,15 @@ def build_inventory(cfg: InventoryConfig) -> pd.DataFrame:
     if not root.exists():
         raise FileNotFoundError(f"No existe root: {root}")
 
-    for csv_path in sorted(root.rglob("*.csv")):
+    paths = sorted([*root.rglob("*.csv"), *root.rglob("*.parquet")])
+    for csv_path in paths:
         rel = csv_path.relative_to(root)
         parts = rel.parts
-        if len(parts) == 1:
-            # archivo suelto (p. ej. 2x16QAM_16GBd.csv) -> se ignora o marca
-            if csv_path.name in cfg.ignore_files:
-                continue
-            chsp_dir = "__root__"
-        else:
-            chsp_dir = parts[0]
+        # Nuevo formato: escenario/ChSp/archivo.parquet; legado: ChSp/archivo.csv.
+        scenario = parts[0] if len(parts) >= 3 else ""
+        if cfg.scenarios and scenario not in cfg.scenarios:
+            continue
+        chsp_dir = parts[-2] if len(parts) >= 2 else "__root__"
 
         if csv_path.name in cfg.ignore_files:
             continue
@@ -87,7 +88,8 @@ def build_inventory(cfg: InventoryConfig) -> pd.DataFrame:
             label = _label_geometrica(chsp, cfg.boundary_ghz)
 
         rows.append({
-            "capture_id": f"{chsp_dir}/{csv_path.stem}",
+            "capture_id": rel.as_posix().rsplit(".", 1)[0],
+            "scenario": scenario,
             "chsp_ghz": chsp,
             "chsp_dir": chsp_dir,
             "osnr_db": osnr,

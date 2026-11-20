@@ -1,22 +1,24 @@
 # Configuración global del proyecto
 data:
-  root: "/home/oagr/Documentos/UdeA/Semestre 2026-2/SDAI/Proyecto Final/3x16Gbaud_16QAM_B2B/3x16Gbaud_16QAM_B2B"
-  rs_gbaud: 16.0
+  root: "../data/raw/raw_data"
+  scenarios: ["32G_B2B"]
+  rs_gbaud: 32.0
   rolloff: 0.1
-  # B_nom = 16 * 1.1 = 17.6 GHz
-  boundary_ghz: 17.6
-  ambiguous_dirs: ["17p6GHz"]      # no se etiquetan duro
-  control_dirs: ["single_ch"]      # control sin interferencia
-  ignore_files: ["2x16QAM_16GBd.csv"]  # revisar aparte
+  # B_nom = 32 * 1.1 = 35.2 GHz
+  boundary_ghz: 35.2
+  ambiguous_dirs: []
+  control_dirs: []
+  ignore_files: []
 
 blocks:
   size: 100          # m símbolos por bloque
   disjoint: true
 
 split:
-  strategy: "by_osnr"       # "by_chsp" | "by_osnr"
-  val_osnr: 32.0
-  test_osnr: [35.0, 40.0]
+  strategy: "by_song"
+  train_songs: ["song1", "song2"]
+  val_songs: ["song3"]
+  test_songs: ["song4"]
 
 kde:
   subsample: 3000

@@ -1,6 +1,6 @@
 """Carga de adquisiciones IQ y partición en bloques disjuntos.
 
-Cada CSV = 1 adquisición = símbolos del canal central (I, Q).
+Cada CSV/Parquet = 1 adquisición con símbolos IQ del canal central.
 Normalización: potencia media unitaria (E|y|^2 = 1) por captura.
 """
 from __future__ import annotations
@@ -23,13 +23,15 @@ class Capture:
 
 
 def load_capture(row: pd.Series) -> Capture:
-    """Carga un CSV (I,Q) y devuelve símbolos complejos normalizados."""
+    """Carga una adquisición IQ (Parquet nuevo o CSV legado)."""
     path = Path(row["path"])
-    df = pd.read_csv(path)
-    if not {"I", "Q"}.issubset(df.columns):
-        raise ValueError(f"{path}: se esperaban columnas I,Q; hay {df.columns.tolist()}")
+    df = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
+    pairs = [("I", "Q"), ("rx_i", "rx_q")]
+    pair = next((p for p in pairs if set(p).issubset(df.columns)), None)
+    if pair is None:
+        raise ValueError(f"{path}: no encuentro columnas IQ (I,Q o rx_i,rx_q); hay {df.columns.tolist()}")
 
-    y = df["I"].to_numpy(dtype=np.float64) + 1j * df["Q"].to_numpy(dtype=np.float64)
+    y = df[pair[0]].to_numpy(dtype=np.float64) + 1j * df[pair[1]].to_numpy(dtype=np.float64)
 
     # normalización por potencia media
     power = np.mean(np.abs(y) ** 2)
