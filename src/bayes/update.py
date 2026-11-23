@@ -52,12 +52,19 @@ def log_sum_exp(a: np.ndarray) -> float:
 
 
 def accumulate_loglik(bank: KDEBank, loglik: dict[tuple, float],
-                      block: np.ndarray) -> None:
-    """Suma Σ_{y∈block} log f_c(y) a loglik[c] in-place."""
+                      block: np.ndarray,
+                      temperature: float = 1.0,
+                      max_step: float | None = None) -> None:
+    """Suma Σ_{y∈block} log f_c(y) / temperature a loglik[c] in-place.
+    Permite atemperar la verosimilitud (factor de tamaño efectivo) y limitar
+    la contribución por bloque con max_step."""
     for key, cond in bank.conditions.items():
         if not np.isfinite(loglik[key]):
             continue
-        loglik[key] += float(np.sum(cond.log_pdf(block)))
+        step = float(np.sum(cond.log_pdf(block))) / float(temperature)
+        if max_step is not None:
+            step = float(np.clip(step, -max_step, max_step))
+        loglik[key] += step
 
 
 def posterior_from_loglik(loglik: dict[tuple, float],
@@ -73,3 +80,41 @@ def overlap_prob(posterior: dict[tuple, float],
                  inventory_labels: dict[tuple, int]) -> float:
     """b_k = Σ_{c: z(c)=1} π_k(c)."""
     return float(sum(p for k, p in posterior.items() if inventory_labels.get(k) == 1))
+
+
+def compute_brier_score(beliefs: np.ndarray, targets: np.ndarray) -> float:
+    """Calcula el Brier Score: MSE entre las probabilidades predichas y las etiquetas binarias."""
+    b = np.asarray(beliefs, dtype=float)
+    z = np.asarray(targets, dtype=float)
+    return float(np.mean((b - z) ** 2))
+
+
+def reliability_curve(beliefs: np.ndarray, targets: np.ndarray, n_bins: int = 10) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Calcula el diagrama de confiabilidad (probabilidad predicha vs frecuencia observada).
+
+    Retorna:
+        bin_preds: media de probabilidad predicha por bin
+        bin_actuals: frecuencia empírica observada de z=1 por bin
+        bin_counts: cantidad de muestras en cada bin
+    """
+    b = np.asarray(beliefs, dtype=float)
+    z = np.asarray(targets, dtype=float)
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    
+    bin_preds = []
+    bin_actuals = []
+    bin_counts = []
+    
+    for i in range(n_bins):
+        low, high = bin_edges[i], bin_edges[i+1]
+        if i == n_bins - 1:
+            mask = (b >= low) & (b <= high)
+        else:
+            mask = (b >= low) & (b < high)
+        count = int(np.sum(mask))
+        if count > 0:
+            bin_preds.append(float(np.mean(b[mask])))
+            bin_actuals.append(float(np.mean(z[mask])))
+            bin_counts.append(count)
+            
+    return np.array(bin_preds), np.array(bin_actuals), np.array(bin_counts)

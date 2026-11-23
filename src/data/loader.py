@@ -24,7 +24,18 @@ class Capture:
 
 def load_capture(row: pd.Series) -> Capture:
     """Carga una adquisición IQ (Parquet nuevo o CSV legado)."""
-    path = Path(row["path"])
+    raw_path = Path(row["path"])
+    if not raw_path.exists():
+        alt = Path(str(raw_path).replace("../", ""))
+        if alt.exists():
+            path = alt
+        else:
+            path = Path("data/raw/raw_data") / raw_path.name
+            if not path.exists():
+                raise FileNotFoundError(f"No existe el archivo de captura: {raw_path}")
+    else:
+        path = raw_path
+
     df = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
     pairs = [("I", "Q"), ("rx_i", "rx_q")]
     pair = next((p for p in pairs if set(p).issubset(df.columns)), None)

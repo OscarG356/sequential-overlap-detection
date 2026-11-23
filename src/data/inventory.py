@@ -47,10 +47,17 @@ class InventoryConfig:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "InventoryConfig":
+        path = Path(path)
         with open(path) as f:
             cfg = yaml.safe_load(f)["data"]
+        raw_root = Path(cfg["root"])
+        if not raw_root.is_absolute() and not raw_root.exists():
+            if (path.parent / raw_root).exists():
+                raw_root = (path.parent / raw_root).resolve()
+            elif Path("data/raw/raw_data").exists():
+                raw_root = Path("data/raw/raw_data").resolve()
         return cls(
-            root=Path(cfg["root"]),
+            root=raw_root,
             boundary_ghz=float(cfg["boundary_ghz"]),
             ambiguous_dirs=list(cfg.get("ambiguous_dirs", [])),
             control_dirs=list(cfg.get("control_dirs", [])),
